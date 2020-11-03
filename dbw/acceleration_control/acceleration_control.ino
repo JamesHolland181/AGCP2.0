@@ -48,6 +48,7 @@ int Motor = 2;
 int Pedal = analogRead(A0);
 int pwm = 0;
 char current_dir='F';
+const int id = 1;
 
  ////////////////////
 // Helper functions //
@@ -60,12 +61,12 @@ int can_msg_to_input(void){
     unsigned long canId = CAN.getCanId();
 
     SERIAL.println("-----------------------------");
-    SERIAL.print("Get data from ID: 0x");
-    SERIAL.println(canId, HEX);
+    SERIAL.print("Get data from ID: ");
+    SERIAL.println(canId);
 
     // print the data
     for (int i = 0; i < len; i++) { // print the data
-        SERIAL.print(input[i], HEX);
+        SERIAL.print(input[i]);
         SERIAL.print("\t");
     }
     SERIAL.println();
@@ -117,16 +118,21 @@ void setup(){
     SERIAL.println("CAN BUS Shield init ok!");
 }
 
+unsigned char old_broadcast[8];
+
 void loop(){
-    broadcast[5] = 0; broadcast[6] = 0; broadcast[7] = 0; // reset CAN broadcast
+//    broadcast[5] = 0; broadcast[6] = 0; broadcast[7] = 0; // reset CAN broadcast
+
+//    old_broadcast = broadcast; // holds last broadcast to ensure redundant information is being sent out
   
     Pedal = analogRead(A0);
     
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-      if (CAN.getCanId()>>19 == 2) {         // if the message is from the gear selector ...
+      if (CAN.getCanId() == 2) {         // if the message is from the gear selector ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
         current_dir = input;
+        Serial.println("Current Direction: "+current_dir);
       }    
       else
       {         
@@ -155,6 +161,6 @@ void loop(){
     }
     
     // push broadcast (id, ext, length, buffer)
-    CAN.sendMsgBuf(0x01, 0, 8, broadcast);
+    CAN.sendMsgBuf(id, 0, 8, broadcast);
     delay(3000);
 }

@@ -47,6 +47,7 @@ int DirectionRelay = 3;
 int ForwardSwitch = 5;
 int ReverseSwitch = 4;
 int current_dir = 000;
+const int id = 2;
 
  ////////////////////
 // Helper functions //
@@ -61,11 +62,11 @@ char can_msg_to_input(void){
     unsigned long canId = CAN.getCanId();
 
     SERIAL.println("-----------------------------");
-    SERIAL.print("Get data from ID: 0x");
-    SERIAL.println(canId, HEX);
+    SERIAL.print("Get data from ID: ");
+    SERIAL.println(canId);
     
     for (int i = 0; i < len; i++) { // print the data
-        SERIAL.print(buf[i], HEX);
+        SERIAL.print(buf[i]);
         SERIAL.print("\t");
     }
     SERIAL.println();
@@ -116,11 +117,13 @@ void setup(){
     }
     SERIAL.println("CAN BUS Shield init ok!");
 }
-
+unsigned char old_broadcast[8];
 void loop(){
-  //Serial.println("in loop");
-    broadcast[5] = 0; broadcast[6] = 0; broadcast[7] = 0; // reset CAN broadcast
-  
+  //Serial.println("ID: "+id);
+//    broadcast[5] = 1; broadcast[6] = 0; broadcast[7] = 0; // reset CAN broadcast
+    
+//    old_broadcast = broadcast; // holds last broadcast to ensure redundant information is being sent out
+    
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
         input_handler(can_msg_to_input()); // convert can message to input  
@@ -137,8 +140,10 @@ void loop(){
         }
     }
 
-    // push broadcast (id, ext, length, buffer)
-    CAN.sendMsgBuf(0x02, 0, 8, broadcast);
+//    if(broadcast != old_broadcast){
+      // push broadcast (id, ext, length, buffer)
+      CAN.sendMsgBuf(id, 0, 8, broadcast);
+//    }
     delay(3000);
 }
     
