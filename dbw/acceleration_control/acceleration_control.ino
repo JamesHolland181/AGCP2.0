@@ -134,19 +134,19 @@ void loop(){
         current_dir = input;
         Serial.println("Current Direction: "+current_dir);
       }    
-      else
-      {         
+      else if (CAN.getCanId() == 9){   // elif message from on-board computer      
         input_handler(can_msg_to_input()); // convert can message to input
       }            
     }    
-    
+
+    // for reading user keyboard inputs
     String input="";
-    while (Serial.available()>0) {         // check if data coming
+    while (Serial.available()>0) {         // check for user input
         input+=Serial.read();
         delay(5);
     }
      if(input != ""){ 
-       input_handler(100); // convert can message to input
+       input_handler(input); // convert can message to input
     }
 
     // formatting CAN broadcast
