@@ -44,18 +44,23 @@ MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
 
 int engage[2] = {3,5}; // pin combination for engaging the brake --> IN1 HIGH, IN2 LOW
 int disengage[2] = {3,5}; // pin combination for disengaging the brake --> IN1 LOW, IN2 LOW
-int speed_control = 6; // control speed of actuator with PWM from D6
-int pwm = 0; // 0-255, control speed of actuator/braking
+int speed_control = 6; // control speed of actuator with speed_signal from D6
+int speed_signal = 0; // 0-255, control speed of actuator/braking
 
 int potentiometer = A0; // for feedback
 int maxAnalogReading; // max val of pot
 int minAnalogReading; // min val of pot
 bool limit = false; // limit reached?
 
-String command = ""; // --> [ 'B:', 'braking_percentage %', 'braking_speed %' ]
+char request[9] = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
+int braking_dir = 0; // '0' for disengage and '1' for engage
 int braking_percentage = 0; // desired braking amount
 int braking_speed = 0; // speed of actuator motion
 
+// function prototypes
+int can_msg_to_input(void);
+void input_handler(int braking_dir, int braking_percentage, int braking_speed);
+int moveToLimit(int Direction);
 
 void setup(){
     // CAN-BUS Setup
@@ -80,7 +85,6 @@ void setup(){
     minAnalogReading = moveToLimit(-1);
 }
 
-unsigned char old_broadcast[8];
 
 void loop(){    
     // handle receiving inputs
@@ -88,84 +92,28 @@ void loop(){
       if (CAN.getCanId() == 9) {         // if CAN is from on-board computer ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
         
-      }    
-      else
-      {         
-        input_handler(can_msg_to_input()); // convert can message to input
-      }            
+        braking_dir = input[1];
+        braking_percentage = input[2]+input[3]+input[4]; 
+        braking_speed = input[5]+input[6]+input[7]; 
+      }             
     }    
     
-     // handle receiving inputs        
+    // handle receiving user inputs        
     while (Serial.available() > 0){
         char c = Serial.read();
-        command += c;
+        strcat(request,c);
         delay(5);
     }
     
-    if(command != ""){
+    if(request != ""){
         Serial.print("MSG: ");
-        Serial.println(command);
-        input_handler(command); // convert can message to input
-    }
-    
-    if(command.substring(0,command.indexOf(":")) == "B")
-    {
-        Serial.println("Brake");
-        command.remove(0,(command.indexOf(":")+1));
-        Serial.println(command);
-        pwm = map(command.toInt(),0,100,40,255); 
-
-        // Apply brakes
-        if(command.toInt() >= 1)
-        {
-        delay(500);
-        Serial.println("on");
-        
-        // implement feedback
-        while(limit == false){
-          digitalWrite(speed_control,pwm);
-          digitalWrite(engage[0],HIGH);
-
-          // break from loop if limits have been reached
-          if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)){ break;}
-
-          // break from loop if desired braking percentage reached
-          if((A0/(maxAnalogReading-minAnalogReading)) == braking_percentage){break;}
-        }
-
-        // power down
-        digitalWrite(speed_control,0);
-        digitalWrite(engage[0],LOW); 
-        digitalWrite(engage[1],LOW); 
-        
-        }
-        
-        // Release brakes
-        else
-        {
-        delay(500);
-        Serial.println("off");
-         
-        while(limit == false){
-          digitalWrite(speed_control,pwm);
-          digitalWrite(disengage[0],HIGH);
-
-          if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)){ break;}
-        }
-
-        // power down 
-        digitalWrite(speed_control, 0);
-        digitalWrite(disengage[0],LOW); 
-        digitalWrite(disengage[1],LOW);
-        }    
-
-        // implement potentiometer feedback to stop power supply
-        delay(2000);
-        digitalWrite(disengage[0],LOW);
-        digitalWrite(disengage[1],LOW);
-    }    
-    
-    command = "";    
+        Serial.println(request);
+        braking_dir = strtok(request,':');
+        braking_percentage = strtok(request,':');
+        braking_speed = strtok(request,':');
+        input_handler(braking_dir, braking_percentage, braking_speed); // convert can message to input
+        request[0] = '0'; // reset request field
+    }   
 }
 
 
@@ -193,33 +141,53 @@ int can_msg_to_input(void){
 }
 
 // input handler
-void input_handler(int input){
-    // if input is an 'S' --> kill power to motor
-    if(input == 0)
+void input_handler(int braking_dir, int braking_percentage, int braking_speed){
+    // if braking_dir is '1' --> engage brakes by powering on 'engage[0]' (D3)
+    if(braking_dir == 1)
     {
-        analogWrite(Motor,0);
-    }    
-    
-    // Modulate PWM according to input  
-    if(current_dir == 'R')
-    {
-        pwm = map(input,0,100,40,255)-5; // in reverse, limit the allowed speed
-        analogWrite(Motor,pwm);
-        Serial.println("Current Dir: Reverse");
-        Serial.println("TPS: "+input);        
-        Serial.println("PWM Signal: "+pwm);
+          // Modulate speed_signal according to input  
+          if(braking_percentage >= 1)
+          {
+          Serial.println("on");
+          
+          // potentiometer feedback
+          while(limit == false){
+            // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
+            digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
+            // rotate via HIGH on 'D3' to 'IN1' on H-bridge
+            digitalWrite(engage[0],HIGH);
+      
+            // break from loop if limits have been reached or desired position has been reached
+            if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)or((A0/(maxAnalogReading-minAnalogReading)) == braking_percentage)){ break;}
+          }
+          }
     }
-    else if(current_dir == "F")
+          
+    // if braking_dir is '0' --> disengage brakes by powering on 'disengage[0]' (D5)
+    else
     {
-        pwm = map(input,0,100,40,255); 
-        analogWrite(Motor,pwm);
-        Serial.println("Current Dir: Forward");
-        Serial.println("TPS: "+input);        
-        Serial.println("PWM Signal: "+pwm);
-    }  
-    else{
-      analogWrite(Motor,0); // kill signal
-    }
+        Serial.println("off");
+        
+        // Modulate speed_signal according to input  
+        if(braking_percentage >= 1){
+           // potentiometer feedback
+            while(limit == false){
+              // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
+              digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
+              // rotate via HIGH on 'D5' to 'IN2' on H-bridge
+              digitalWrite(disengage[0],HIGH);
+      
+            // break from loop if limits have been reached or desired position has been reached
+            if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)or((A0/(maxAnalogReading-minAnalogReading)) == braking_percentage)){ break;}
+            }
+        }
+            
+    } 
+          
+    // power down
+    digitalWrite(speed_control,0);
+    digitalWrite(engage[0],LOW); 
+    digitalWrite(engage[1],LOW); 
 }
 
 // for calibrating linear actuator
@@ -230,12 +198,12 @@ int moveToLimit(int Direction){
     prevReading = currReading;
     
     if(Direction ==1){
-        digitalWrite(speed_control,pwm);
+        digitalWrite(speed_control,speed_signal);
         digitalWrite(engage[0],HIGH);
         digitalWrite(engage[1],LOW);
     }
     else if(Direction == -1){
-        digitalWrite(speed_control,pwm);
+        digitalWrite(speed_control,speed_signal);
         digitalWrite(disengage[0],HIGH);
         digitalWrite(disengage[1],LOW);
     }

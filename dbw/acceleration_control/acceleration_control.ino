@@ -44,64 +44,17 @@ MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
 //
 ////////
 
-int Motor = 2;
-int Pedal = analogRead(A0);
-int pwm = 0;
-char current_dir='F';
-const int id = 1;
+const int id = 1;   // CAN node ID
+int Motor = 2;      // D2 --> for sending PWM to DC motor controller
+int pwm = 0;        // PWM signal for D2
+int Pedal = analogRead(A0); // pedal position --> if applied, kills autonomous mode
+char gear_selected[3]="010"; // "100" for forward, "010" for neutral, "001" for reverse
+char current_dir = 'N'; // 'F' for forward, 'N' for neutral, 'R' for reverse
+char request[3] = "";
 
- ////////////////////
-// Helper functions //
- ////////////////////
-
-// Receive CAN messages
-int can_msg_to_input(void){
-    CAN.readMsgBuf(&len, input);    // read data,  len: data length, buf: data buf
-
-    unsigned long canId = CAN.getCanId();
-
-    SERIAL.println("-----------------------------");
-    SERIAL.print("Get data from ID: ");
-    SERIAL.println(canId);
-
-    // print the data
-    for (int i = 0; i < len; i++) { // print the data
-        SERIAL.print(input[i]);
-        SERIAL.print("\t");
-    }
-    SERIAL.println();
-    return input; // append to input
-}
-
-// input handler
-void input_handler(int input){
-    // if input is an 'S' --> kill power to motor
-    if(input == 0)
-    {
-        analogWrite(Motor,0);
-    }    
-    
-    // Modulate PWM according to input  
-    if(current_dir == 'R')
-    {
-        pwm = map(input,0,100,40,255)-5; // in reverse, limit the allowed speed
-        analogWrite(Motor,pwm);
-        Serial.println("Current Dir: Reverse");
-        Serial.println("TPS: "+input);        
-        Serial.println("PWM Signal: "+pwm);
-    }
-    else if(current_dir == "F")
-    {
-        pwm = map(input,0,100,40,255); 
-        analogWrite(Motor,pwm);
-        Serial.println("Current Dir: Forward");
-        Serial.println("TPS: "+input);        
-        Serial.println("PWM Signal: "+pwm);
-    }  
-    else{
-      analogWrite(Motor,0); // kill signal
-    }
-}
+// function prototypes
+int can_msg_to_input(void);
+void input_handler(String input);
 
 void setup(){
     // define the function of the Motor pin
@@ -118,35 +71,38 @@ void setup(){
     SERIAL.println("CAN BUS Shield init ok!");
 }
 
-unsigned char old_broadcast[8];
 
 void loop(){
-//    broadcast[5] = 0; broadcast[6] = 0; broadcast[7] = 0; // reset CAN broadcast
-
-//    old_broadcast = broadcast; // holds last broadcast to ensure redundant information is being sent out
-  
     Pedal = analogRead(A0);
     
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
       if (CAN.getCanId() == 2) {         // if the message is from the gear selector ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
-        current_dir = input;
+
+        // determine current direction
+        if(input[5] == '1'){current_dir = 'F'; gear_selected[3] = "100";}
+        if(input[6] == '1'){current_dir = 'N'; gear_selected[3] = "010";}
+        if(input[7] == '1'){current_dir = 'R'; gear_selected[3] = "010";}
         Serial.println("Current Direction: "+current_dir);
       }    
-      else if (CAN.getCanId() == 9){   // elif message from on-board computer      
-        input_handler(can_msg_to_input()); // convert can message to input
+      else if(current_dir != 'N'){ // if 'transmission' is in gear
+        input_handler(input, current_dir); // convert can message to input
       }            
     }    
 
-    // for reading user keyboard inputs
-    String input="";
-    while (Serial.available()>0) {         // check for user input
-        input+=Serial.read();
+    // handle receiving user inputs        
+    while (Serial.available() > 0){
+        char c = Serial.read();
+        strcat(request,c);
         delay(5);
     }
-     if(input != ""){ 
-       input_handler(input); // convert can message to input
+    
+    if(request != ""){
+        Serial.print("MSG: ");
+        Serial.println(request);
+        input_handler(request,current_dir); // convert can message to input
+        request[0] = '0'; // reset input field
     }
 
     // formatting CAN broadcast
@@ -163,4 +119,38 @@ void loop(){
     // push broadcast (id, ext, length, buffer)
     CAN.sendMsgBuf(id, 0, 8, broadcast);
     delay(3000);
+}
+
+
+ ////////////////////
+// Helper functions //
+ ////////////////////
+
+// input handler
+void input_handler(String tps, char current_dir){
+    int pwm = map(tps.toInt(),0,100,40,255); // translate from percentage to PWM
+    
+    if(input == 0)
+    {
+        analogWrite(Motor,0);
+    }    
+    
+    // Modulate PWM according to input  
+    if(current_dir == 'R')
+    {
+        analogWrite(Motor,pwm-5); // in reverse, limit the allowed speed
+        Serial.println("Current Dir: Reverse");
+        Serial.println("TPS: "+tps);        
+        Serial.println("PWM Signal: "+pwm);
+    }
+    else if(current_dir == "F")
+    {
+        analogWrite(Motor,pwm);
+        Serial.println("Current Dir: Forward");
+        Serial.println("TPS: "+tps);        
+        Serial.println("PWM Signal: "+pwm);
+    }  
+    else{
+      analogWrite(Motor,0); // kill signal
+    }
 }
