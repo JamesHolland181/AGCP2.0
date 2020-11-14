@@ -118,25 +118,6 @@ void loop(){
 // Helper functions //
  ////////////////////
 
-// Receive CAN messages
-int can_msg_to_input(void){
-    CAN.readMsgBuf(&len, input);    // read data,  len: data length, buf: data buf
-
-    unsigned long canId = CAN.getCanId();
-
-    SERIAL.println("-----------------------------");
-    SERIAL.print("Get data from ID: ");
-    SERIAL.println(canId);
-
-    // print the data
-    for (int i = 0; i < len; i++) { // print the data
-        SERIAL.print(input[i]);
-        SERIAL.print("\t");
-    }
-    SERIAL.println();
-    return input; // append to input
-}
-
 // input handler
 void input_handler(int braking_dir, int braking_percentage, int braking_speed){
     // if braking_dir is '1' --> engage brakes by powering on 'engage[0]' (D3)
