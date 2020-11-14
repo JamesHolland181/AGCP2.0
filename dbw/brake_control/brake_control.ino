@@ -47,10 +47,9 @@ int disengage[2] = {3,5}; // pin combination for disengaging the brake --> IN1 L
 int speed_control = 6; // control speed of actuator with speed_signal from D6
 int speed_signal = 0; // 0-255, control speed of actuator/braking
 
-int potentiometer = A0; // for feedback
+int current_pos = analogRead(A0); // for feedback
 int maxAnalogReading; // max val of pot
 int minAnalogReading; // min val of pot
-bool limit = false; // limit reached?
 
 char request[9] = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
 int braking_dir = 0; // '0' for disengage and '1' for engage
@@ -78,7 +77,7 @@ void setup(){
     pinMode(disengage[0],OUTPUT);
     pinMode(disengage[1],OUTPUT);
     pinMode(speed_control,OUTPUT);
-    pinMode(potentiometer, INPUT);
+    pinMode(A0, INPUT);
 
     // find limits of potentiometer
     maxAnalogReading = moveToLimit(1);
@@ -97,14 +96,12 @@ void loop(){
         braking_speed = input[5]+input[6]+input[7]; 
       }             
     }    
-    
     // handle receiving user inputs        
     while (Serial.available() > 0){
         char c = Serial.read();
         strcat(request,c);
         delay(5);
     }
-    
     if(request != ""){
         Serial.print("MSG: ");
         Serial.println(request);
@@ -151,18 +148,19 @@ void input_handler(int braking_dir, int braking_percentage, int braking_speed){
           Serial.println("on");
           
           // potentiometer feedback
-          while(limit == false){
+          while(true){
+            // update current position
+            current_pos = analogRead(A0);
             // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
             digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
             // rotate via HIGH on 'D3' to 'IN1' on H-bridge
             digitalWrite(engage[0],HIGH);
       
-            // break from loop if limits have been reached or desired position has been reached
-            if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)or((A0/(maxAnalogReading-minAnalogReading)) == braking_percentage)){ break;}
+            // break from loop if desired position has been reached
+            if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
           }
           }
     }
-          
     // if braking_dir is '0' --> disengage brakes by powering on 'disengage[0]' (D5)
     else
     {
@@ -170,20 +168,19 @@ void input_handler(int braking_dir, int braking_percentage, int braking_speed){
         
         // Modulate speed_signal according to input  
         if(braking_percentage >= 1){
-           // potentiometer feedback
-            while(limit == false){
+            while(true){
+              // update current position
+              current_pos = analogRead(A0);              
               // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
               digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
               // rotate via HIGH on 'D5' to 'IN2' on H-bridge
               digitalWrite(disengage[0],HIGH);
       
-            // break from loop if limits have been reached or desired position has been reached
-            if((A0 >= maxAnalogReading)or(A0 <= minAnalogReading)or((A0/(maxAnalogReading-minAnalogReading)) == braking_percentage)){ break;}
+            // break from loop if desired position has been reached
+            if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
             }
         }
-            
-    } 
-          
+    }     
     // power down
     digitalWrite(speed_control,0);
     digitalWrite(engage[0],LOW); 
@@ -193,9 +190,9 @@ void input_handler(int braking_dir, int braking_percentage, int braking_speed){
 // for calibrating linear actuator
 int moveToLimit(int Direction){
   int prevReading=0;
-  int currReading=0;
+  current_pos=0;
   do{
-    prevReading = currReading;
+    prevReading = current_pos;
     
     if(Direction ==1){
         digitalWrite(speed_control,speed_signal);
@@ -209,7 +206,7 @@ int moveToLimit(int Direction){
     }
 
     delay(200); //keep moving until analog reading remains the same for 200ms
-    currReading = analogRead(potentiometer);
-  }while(prevReading != currReading);
-  return currReading;
+    current_pos = analogRead(A0);
+  }while(prevReading != current_pos);
+  return current_pos;
 }
