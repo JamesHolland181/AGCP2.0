@@ -83,7 +83,7 @@ void loop(){
         // determine current direction
         if(input[5] == '1'){current_dir = 'F'; gear_selected[3] = "100";}
         if(input[6] == '1'){current_dir = 'N'; gear_selected[3] = "010";}
-        if(input[7] == '1'){current_dir = 'R'; gear_selected[3] = "010";}
+        if(input[7] == '1'){current_dir = 'R'; gear_selected[3] = "001";}
         Serial.println("Current Direction: "+current_dir);
       }    
       else if(current_dir != 'N'){ // if 'transmission' is in gear
@@ -130,7 +130,7 @@ void loop(){
 void input_handler(String tps, char current_dir){
     int pwm = map(tps.toInt(),0,100,40,255); // translate from percentage to PWM
     
-    if(input == 0)
+    if(pwm == 0)
     {
         analogWrite(Motor,0);
     }    
