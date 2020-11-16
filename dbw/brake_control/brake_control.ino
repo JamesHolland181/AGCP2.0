@@ -111,6 +111,13 @@ void loop(){
         input_handler(braking_dir, braking_percentage, braking_speed); // convert can message to input
         request[0] = '0'; // reset request field
     }   
+    
+    // push broadcast (id, ext, length, buffer)
+    broadcast[5]='9';
+    broadcast[6]='9';
+    broadcast[7]='9';
+    CAN.sendMsgBuf(2, 0, 8, broadcast);
+    delay(3000);    
 }
 
 
