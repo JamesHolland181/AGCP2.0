@@ -42,8 +42,7 @@ MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
 //
 ////////
 
-int engage[2] = {3,5}; // pin combination for engaging the brake --> IN1 HIGH, IN2 LOW
-int disengage[2] = {3,5}; // pin combination for disengaging the brake --> IN1 LOW, IN2 LOW
+int engage[2] = {5,3}; // pin combination for engaging the brake --> IN1 HIGH, IN2 LOW
 int speed_control = 6; // control speed of actuator with speed_signal from D6
 int speed_signal = 0; // 0-255, control speed of actuator/braking
 
@@ -74,8 +73,6 @@ void setup(){
       
     pinMode(engage[0],OUTPUT);
     pinMode(engage[1],OUTPUT);
-    pinMode(disengage[0],OUTPUT);
-    pinMode(disengage[1],OUTPUT);
     pinMode(speed_control,OUTPUT);
     pinMode(A0, INPUT);
 
@@ -142,7 +139,8 @@ void input_handler(int braking_dir, int braking_percentage, int braking_speed){
             // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
             digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
             // rotate via HIGH on 'D3' to 'IN1' on H-bridge
-            digitalWrite(engage[0],HIGH);
+            digitalWrite(engage[0],LOW);
+            digitalWrite(engage[1],HIGH);
       
             // break from loop if desired position has been reached
             if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
@@ -162,7 +160,8 @@ void input_handler(int braking_dir, int braking_percentage, int braking_speed){
               // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
               digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
               // rotate via HIGH on 'D5' to 'IN2' on H-bridge
-              digitalWrite(disengage[0],HIGH);
+              digitalWrite(engage[0],HIGH);
+              digitalWrite(engage[1],LOW);
       
             // break from loop if desired position has been reached
             if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
@@ -189,8 +188,8 @@ int moveToLimit(int Direction){
     }
     else if(Direction == -1){
         digitalWrite(speed_control,speed_signal);
-        digitalWrite(disengage[0],HIGH);
-        digitalWrite(disengage[1],LOW);
+        digitalWrite(engage[1],HIGH);
+        digitalWrite(engage[0],LOW);
     }
 
     delay(200); //keep moving until analog reading remains the same for 200ms
