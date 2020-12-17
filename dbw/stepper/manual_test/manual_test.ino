@@ -10,10 +10,11 @@ String request = "";
 void setup()
 {  
   // Experimental --> uses "digitalWriteFast" library for faster timing
-  //pinModeFast(left_encoder,INPUT);
-  //pinModeFast(right_encoder,INPUT);
-  //pinModeFast(pulse,OUTPUT);
-  //pinModeFast(dir,OUTPUT);  
+//  pinModeFast(left_encoder,INPUT);
+//  pinModeFast(right_encoder,INPUT);
+//  pinModeFast(pulse,OUTPUT);
+//  pinModeFast(dir,OUTPUT);  
+  Serial.begin(115200);
   pinMode(pulse,OUTPUT);
   pinMode(dir,OUTPUT);
   pinMode(left_encoder,INPUT);
@@ -32,18 +33,23 @@ void loop()
         delay(5);
     }
     // Parse input --> Forward and Reverse
-    if(request.charAt(0)=='F'){
+    if(request=="forward"){
+      Serial.println(request);
         digitalWrite(dir,HIGH);
     }
-    else if(request.charAt(0)=='R'){
+    else if(request == "reverse"){
+      Serial.println(request);
         digitalWrite(dir,LOW);
     }
-    
     //uncomment if running manually
     for(int x=0;x<20;x++){
-        digitalWriteFast(pulse,HIGH);
+//        digitalWriteFast(pulse,HIGH);
+//        delay(1); // Test without this as well
+//        digitalWriteFast(pulse,LOW);
+        
+        digitalWrite(pulse,HIGH);
         delay(1); // Test without this as well
-        digitalWriteFast(pulse,LOW);
+        digitalWrite(pulse,LOW);        
     }
     request = "";
 }
