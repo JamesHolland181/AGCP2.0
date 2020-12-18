@@ -41,23 +41,24 @@ MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
 // Brake Variables
 //
 ////////
+unsigned long clk = millis();
+int engage[2] = {5,6}; // pin combination for engaging the brake --> IN2, IN1
 
-int engage[2] = {5,3}; // pin combination for engaging the brake --> IN1 HIGH, IN2 LOW
-int speed_control = 6; // control speed of actuator with speed_signal from D6
-int speed_signal = 0; // 0-255, control speed of actuator/braking
-
-int current_pos = analogRead(A0); // for feedback
-int maxAnalogReading; // max val of pot
+int speed_control = 7; // for manipulating speed via PWM on H-bridge
+int pot_pin = analogRead(A0); // for feedback
+int prev_reading = 0;
+int maxAnalogReading; // max val of pot 
 int minAnalogReading; // min val of pot
 
-char request[9] = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
+//char request[15] = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
+String request = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
 int braking_dir = 0; // '0' for disengage and '1' for engage
-int braking_percentage = 0; // desired braking amount
-int braking_speed = 0; // speed of actuator motion
+double braking_percentage = 0.0; // desired braking amount
+double braking_speed = 0.0;
 
 // function prototypes
 int can_msg_to_input(void);
-void input_handler(int braking_dir, int braking_percentage, int braking_speed);
+void input_handler(int braking_dir, double braking_percentage, double braking_speed);
 int moveToLimit(int Direction);
 
 void setup(){
@@ -77,10 +78,9 @@ void setup(){
     pinMode(A0, INPUT);
 
     // find limits of potentiometer
-    maxAnalogReading = moveToLimit(1);
-    minAnalogReading = moveToLimit(-1);
+    //maxAnalogReading = moveToLimit(1);
+    //minAnalogReading = moveToLimit(-1);    
 }
-
 
 void loop(){    
     // handle receiving inputs
@@ -91,109 +91,81 @@ void loop(){
         braking_dir = input[1];
         braking_percentage = input[2]+input[3]+input[4]; 
         braking_speed = input[5]+input[6]+input[7]; 
+
+        input_handler(braking_dir, braking_percentage, braking_speed);
       }             
     }    
     // handle receiving user inputs        
     while (Serial.available() > 0){
+        //Serial.println("reading");
         char c = Serial.read();
-        strcat(request,c);
+        if(c != '\n'){
+          request += c;
+        }
         delay(5);
-    }
-    if(request != ""){
-        Serial.print("MSG: ");
-        Serial.println(request);
-        braking_dir = strtok(request,':');
-        braking_percentage = strtok(request,':');
-        braking_speed = strtok(request,':');
-        input_handler(braking_dir, braking_percentage, braking_speed); // convert can message to input
-        request[0] = '0'; // reset request field
+    }  
+    if(request == "engage"){
+        Serial.println("Engage 1 ");
+        input_handler(1,100,100);
     }   
-    
-    // push broadcast (id, ext, length, buffer)
-    broadcast[5]='9';
-    broadcast[6]='9';
-    broadcast[7]='9';
-    CAN.sendMsgBuf(2, 0, 8, broadcast);
-    delay(3000);    
+    else if(request == "disengage"){
+      Serial.println("Disengage 1 ");
+      input_handler(0,100,100);
+    }
+    request = "";
+    // broadcast to CAN
+    broadcast[0] = braking_dir;    broadcast[1] = braking_percentage;    broadcast[2] = braking_speed;
+//    Serial.print("BROADCAST: ");
+    int i=0;
+//    while(broadcast[i] != " "){
+//        Serial.print(broadcast[i]);
+//        i++;
+//    }
+//    if(i != 0){Serial.println(" ");}
+    //CAN.sendMsgBuf(3, 0, 8, broadcast);    
 }
-
 
  ////////////////////
 // Helper functions //
  ////////////////////
 
 // input handler
-void input_handler(int braking_dir, int braking_percentage, int braking_speed){
-    // if braking_dir is '1' --> engage brakes by powering on 'engage[0]' (D3)
-    if(braking_dir == 1)
-    {
-          // Modulate speed_signal according to input  
-          if(braking_percentage >= 1)
-          {
-          Serial.println("on");
-          
-          // potentiometer feedback
-          while(true){
-            // update current position
-            current_pos = analogRead(A0);
-            // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
-            digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
-            // rotate via HIGH on 'D3' to 'IN1' on H-bridge
-            digitalWrite(engage[0],LOW);
-            digitalWrite(engage[1],HIGH);
-      
-            // break from loop if desired position has been reached
-            if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
-          }
-          }
+void input_handler(int braking_dir, double braking_percentage, double braking_speed){
+  prev_reading=0;
+  if(braking_percentage > 1){
+    if(braking_dir ==1){
+      Serial.println("engage 2 ");
+      digitalWrite(engage[0],HIGH);
+      digitalWrite(engage[1],LOW);
     }
-    // if braking_dir is '0' --> disengage brakes by powering on 'disengage[0]' (D5)
-    else
-    {
-        Serial.println("off");
-        
-        // Modulate speed_signal according to input  
-        if(braking_percentage >= 1){
-            while(true){
-              // update current position
-              current_pos = analogRead(A0);              
-              // manipulate speed with pwm signal on pin D6 to 'ENA' on H-bridge
-              digitalWrite(speed_control,map(braking_speed,0,100,0,255));    // convert braking speed to pwm signal
-              // rotate via HIGH on 'D5' to 'IN2' on H-bridge
-              digitalWrite(engage[0],HIGH);
-              digitalWrite(engage[1],LOW);
-      
-            // break from loop if desired position has been reached
-            if((current_pos/(maxAnalogReading-minAnalogReading) == braking_percentage)){ break;}
-            }
-        }
-    }     
+    else if(braking_dir == 0){
+      Serial.println("disengage 2 ");
+      digitalWrite(engage[1],HIGH);
+      digitalWrite(engage[0],LOW);
+    }
+  }    
     // power down
-    digitalWrite(speed_control,0);
-    digitalWrite(engage[0],LOW); 
-    digitalWrite(engage[1],LOW); 
+    analogWrite(speed_control,0);
 }
 
 // for calibrating linear actuator
 int moveToLimit(int Direction){
   int prevReading=0;
-  current_pos=0;
+  int pot_pin=0;
   do{
-    prevReading = current_pos;
+    prevReading = pot_pin;
     
     if(Direction ==1){
-        digitalWrite(speed_control,speed_signal);
         digitalWrite(engage[0],HIGH);
         digitalWrite(engage[1],LOW);
     }
     else if(Direction == -1){
-        digitalWrite(speed_control,speed_signal);
         digitalWrite(engage[1],HIGH);
         digitalWrite(engage[0],LOW);
     }
 
     delay(200); //keep moving until analog reading remains the same for 200ms
-    current_pos = analogRead(A0);
-  }while(prevReading != current_pos);
-  return current_pos;
+    pot_pin = analogRead(A0);
+  }while(prevReading != pot_pin);
+  return pot_pin;
 }
