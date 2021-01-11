@@ -16,6 +16,9 @@
 // CAN-Bus Preamble
 // 
 ///////
+#include <can-serial.h>
+#include <mcp2515_can.h>
+#include <mcp2515_can_dfs.h>
 #include <mcp_can.h>
 #include <SPI.h>
 
@@ -35,7 +38,7 @@ unsigned char input[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 unsigned char broadcast[2] = {0, 0};//, 0, 0, 0, 0, 0, 0};
 int msg=0;
 
-MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
+mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
 
 ////////
 //
@@ -74,7 +77,7 @@ void setup(){
 
 void loop(){
     Pedal = analogRead(A0)* (5.0 / 1023.0); //convert signal from pedal to voltage --> when voltage is > 0.10, RC disengaged    
-    ////Serial.println("Pedal: "+String(Pedal));
+    Serial.println("Pedal: "+String(Pedal));
     
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
