@@ -15,7 +15,8 @@
 // CAN-Bus Preamble
 // 
 ///////
-
+#include "mcp2515_can.h"
+#include "mcp2515_can_dfs.h"
 #include <mcp_can.h>
 #include <SPI.h>
 
@@ -35,7 +36,7 @@ unsigned char input[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 unsigned char broadcast[1] = {0};//, 0, 0, 0, 0, 0, 0, 0};
 int msg=0;
 
-MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
+mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
 
 ////////
 //
@@ -115,7 +116,7 @@ void loop(){
 
     // formatting CAN broadcast
     // push broadcast (id, ext, length, buffer)
-    CAN.sendMsgBuf(4, 0, 2, 999);
+    CAN.sendMsgBuf(4, 0, 2, 100);
     
     for(int i=0;i<sizeof(broadcast);i++){   
         //Serial.print(broadcast[i]);

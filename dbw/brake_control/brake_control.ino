@@ -13,6 +13,8 @@
 // CAN-Bus Preamble
 // 
 ///////
+#include "mcp2515_can.h"
+#include "mcp2515_can_dfs.h"
 #include <mcp_can.h>
 #include <SPI.h>
 
@@ -32,8 +34,7 @@ unsigned char input[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 unsigned char broadcast[3] = {0, 0, 0};//, 0, 0, 0, 0, 0};
 int msg=0;
 
-MCP_CAN CAN(SPI_CS_PIN);                                    // Set CS pin
-
+mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
 
 ////////
 //
@@ -51,7 +52,6 @@ int prev_reading = 0;
 int maxAnalogReading; // max val of pot 
 int minAnalogReading; // min val of pot
 
-//char request[15] = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
 String request = ""; // user input --> [ 'braking_dir', 'braking_percentage', 'braking_speed' ]
 int braking_dir = 0; // '0' for disengage and '1' for engage
 double braking_percentage = 0.0; // desired braking amount
@@ -67,11 +67,11 @@ void setup(){
     SERIAL.begin(115200);
 
     while (CAN_OK != CAN.begin(CAN_500KBPS)) {            // init can bus : baudrate = 500k
-        //Serial.printtln("CAN BUS Shield init fail");
-        //Serial.printtln("Init CAN BUS Shield again");
+        //Serial.println("CAN BUS Shield init fail");
+        //Serial.println("Init CAN BUS Shield again");
         delay(100);
     }
-    //Serial.printtln("CAN BUS Shield init ok!");
+    Serial.println("CAN BUS Shield init ok!");
       
     pinMode(engage[0],OUTPUT);
     pinMode(engage[1],OUTPUT);
@@ -86,25 +86,25 @@ void setup(){
 void loop(){    
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-      if (CAN.getCanId() == 9) {         // if CAN is from on-board computer ...
+      if (CAN.getCanId()==9) {         // if CAN is from on-board computer ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
         
         braking_dir = input[1];
-        braking_percentage = input[2]+input[3]+input[4]; 
-        braking_speed = input[5]+input[6]+input[7]; 
+        braking_percentage = input[2]; 
+        braking_speed = input[3]; 
 
         input_handler(braking_dir, braking_percentage, braking_speed);
       }   
-      if(CAN.getCanId()){
-        CAN.readMsgBuf(&len,input);
-        int z=0;
-        while(z<=1){
-          Serial.print(input[z]);
-          z++;
-        }
-        Serial.println(" ");
-      }
-    }    
+//      if(CAN.getCanId()){
+//        CAN.readMsgBuf(&len,input);
+//        int z=0;
+//        while(z<=1){
+//          Serial.print(input[z]);
+//          z++;
+//        }
+//        Serial.println(" ");
+//      }
+    }
     // handle receiving user inputs        
     while (Serial.available() > 0){
         ////Serial.printtln("reading");
@@ -115,14 +115,14 @@ void loop(){
         delay(5);
     }  
     if(request == "engage"){
-        ////Serial.printtln("Engage 1 ");
+//        Serial.println("Engage 1 ");
         input_handler(1,100,100);
         braking_dir = 1;
         braking_percentage = 100;
         braking_speed = 100;
     }   
     else if(request == "disengage"){
-      ////Serial.printtln("Disengage 1 ");
+//      Serial.println("Disengage 1 ");
       input_handler(0,100,100);
       braking_dir = 0;
       braking_percentage = 100;
@@ -152,12 +152,12 @@ void input_handler(int braking_dir, double braking_percentage, double braking_sp
   prev_reading=0;
   if(braking_percentage > 1){
     if(braking_dir ==1){
-      ////Serial.printtln("engage 2 ");
+      ////Serial.println("engage 2 ");
       digitalWrite(engage[0],HIGH);
       digitalWrite(engage[1],LOW);
     }
     else if(braking_dir == 0){
-      ////Serial.printtln("disengage 2 ");
+      ////Serial.println("disengage 2 ");
       digitalWrite(engage[1],HIGH);
       digitalWrite(engage[0],LOW);
     }

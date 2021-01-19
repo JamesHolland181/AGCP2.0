@@ -16,9 +16,8 @@
 // CAN-Bus Preamble
 // 
 ///////
-#include <can-serial.h>
-#include <mcp2515_can.h>
-#include <mcp2515_can_dfs.h>
+#include "mcp2515_can.h"
+#include "mcp2515_can_dfs.h"
 #include <mcp_can.h>
 #include <SPI.h>
 
@@ -35,7 +34,7 @@ const int SPI_CS_PIN = 9;
 
 unsigned char len = 0;
 unsigned char input[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-unsigned char broadcast[2] = {0, 0};//, 0, 0, 0, 0, 0, 0};
+unsigned char broadcast[1] = {0};
 int msg=0;
 
 mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
@@ -45,23 +44,25 @@ mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
 // Accelerator Variables
 //
 ////////
+#include <Wire.h>
+#include <Adafruit_MCP4725.h>
+
+Adafruit_MCP4725 Motor;
 
 const int id = 1;   // CAN node ID
-int Motor = 6;      // D6 --> for sending PWM to DC motor controller
 int tps = 0;
-int pwm = 0;        // PWM signal for D6
+long voltage = 0;        // PWM signal for D6
 double Pedal = analogRead(A0); // pedal position --> if applied, kills RC mode
-char gear_selected[3]="010"; // "100" for forward, "010" for neutral, "001" for reverse
+int gear_selected=1; // 1 for forward, 2 for neutral, 3 for reverse
 char current_dir = 'F'; // 'F' for forward, 'N' for neutral, 'R' for reverse
-String request = "0";
+String request = "";
 
 // function prototypes
 int can_msg_to_input(void);
 void input_handler(String input);
 
 void setup(){
-    // define the function of the Motor pin
-    pinMode(Motor, OUTPUT);
+    Motor.begin(0x62);  
     // define analog 0 as an input to measure signal from pedal
     pinMode(Pedal, INPUT);
     // CAN-BUS Setup
@@ -77,7 +78,10 @@ void setup(){
 
 void loop(){
     Pedal = analogRead(A0)* (5.0 / 1023.0); //convert signal from pedal to voltage --> when voltage is > 0.10, RC disengaged    
-    Serial.println("Pedal: "+String(Pedal));
+    
+    if(Pedal > 0.00){
+      Serial.println("Pedal: "+String(Pedal));
+    }
     
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
@@ -85,28 +89,28 @@ void loop(){
         CAN.readMsgBuf(&len, input); // read can message to update direction
 
         // determine current direction
-        if(input[1] == '1'){current_dir = 'F'; gear_selected[3] = "100";}
-        if(input[1] == '1'){current_dir = 'N'; gear_selected[3] = "010";}
-        if(input[1] == '1'){current_dir = 'R'; gear_selected[3] = "001";}
+        if(input[1] == '1'){current_dir = 'F'; gear_selected = 1;}
+        if(input[1] == '2'){current_dir = 'N'; gear_selected = 2;}
+        if(input[1] == '3'){current_dir = 'R'; gear_selected = 3;}
         ////Serial.println("Current Direction: "+current_dir);
       }    
       else if(current_dir != 'N'){ // if 'transmission' is in gear
-        pwm = input_handler(input, current_dir); // convert can message to input
+        voltage = input_handler(input, current_dir); // convert can message to input
       }            
-      if(CAN.getCanId()){
-        CAN.readMsgBuf(&len,input);
-        int z=0;
-        while(z<=2){
-          Serial.print(input[z]);
-          z++;
-        }
-        Serial.println(" ");
-      }
+//      if(CAN.getCanId()){
+//        CAN.readMsgBuf(&len,input);
+//        int z=0;
+//        while(z<=2){
+//          Serial.print(input[z]);
+//          z++;
+//        }
+//        Serial.println(" ");
+//      }
     }    
 
     // handle receiving user inputs        
     while (Serial.available() > 0){
-        ////Serial.println("reading");
+        //Serial.println("reading");
         char c = Serial.read();
         if(c != '\n'){
           request += c;
@@ -116,23 +120,20 @@ void loop(){
 
     if(request.toInt() > 0){
         tps = request.toInt();
-        //Serial.print("Throttle Position: ");
-        //Serial.println(tps);
-        pwm = input_handler(tps,current_dir); // convert can message to input
-        request = "0"; // reset input field
+        Serial.print("Throttle Position: ");
+        Serial.println(tps);
+        voltage = input_handler(tps,current_dir); // convert can message to input
     }
-    else if(request == "S"){
+    else if(request.indexOf("S")>=0){
       tps = 0;
-      //Serial.println("STOP");
-      pwm = input_handler(tps,'N');
-      request = "";
+      Serial.println("STOP");
+      voltage = input_handler(tps,'N');
     }
 
     // formatting CAN broadcast
     // push broadcast (id, ext, length, buffer)
     broadcast[0] = tps;
-    broadcast[1] = pwm;
-    CAN.sendMsgBuf(id, 0, 2, broadcast);
+    CAN.sendMsgBuf(id, 0, 1, broadcast);
     
     for(int i=0;i<sizeof(broadcast);i++){   
         //Serial.print(broadcast[i]);
@@ -140,6 +141,7 @@ void loop(){
     //Serial.println(" ");
 
     delay(3000);
+    request = ""; // reset input field
 }
 
 
@@ -149,26 +151,29 @@ void loop(){
 
 // input handler
 int input_handler(int tps, char current_dir){
-    pwm = map(tps,0,100,40,230); // translate from percentage to PWM --> cannot go all the way to 5V, limit is ~4.5V
+    voltage = map(tps,0,100,0,4095); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V
     // Modulate PWM according to input  
+//    Serial.println(voltage);
     if(current_dir == 'R')
     {
-        analogWrite(Motor,pwm-5); // in reverse, limit the allowed speed
+        Motor.setVoltage(voltage-5, false); // in reverse, limit the allowed speed
+        //analogWrite(Motor,voltage-5); // in reverse, limit the allowed speed
         //Serial.println("Current Dir: Reverse");
         //Serial.println("TPS: "+String(tps));        
-        //Serial.println("PWM Signal: "+String(pwm));
+        //Serial.println("PWM Signal: "+String(voltage));
     }
     else if(current_dir == 'F')
     {
-        analogWrite(Motor,pwm);
+        Motor.setVoltage(voltage, false);
+        //analogWrite(Motor,voltage);
         //Serial.println("Current Dir: Forward");
         //Serial.println("TPS: "+String(tps));        
-        //Serial.println("PWM Signal: "+String(pwm));
+        //Serial.println("PWM Signal: "+String(voltage));
     }  
     else{
-      //pwm = 0;
-      //analogWrite(Motor,0); // kill signal
+      voltage = 0;
+      Motor.setVoltage(voltage, false); // kill power
     }
 
-    return pwm;
+    return voltage;
 }
