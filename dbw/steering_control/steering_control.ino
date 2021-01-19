@@ -50,6 +50,8 @@ mcp2515_can CAN(SPI_CS_PIN);                                    // Set CS pin
 #define dir 5
 
 String request = "";
+bool rot_dir = 1; // '0' for counter clockwise and '1' for clockwise
+int rot_speed = 0; // 0-100% RPM in direction of rotation previously defined
 
 // function prototypes
 int can_msg_to_input(void);
@@ -76,17 +78,19 @@ void setup(){
 void loop(){
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-      if (CAN.getCanId() == 2) {         // if the message is from the gear selector ...
+      if (CAN.getCanId() == 9) {         // if the message is from the SpeedGoat ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
-      }            
-      if(CAN.getCanId()){
-        CAN.readMsgBuf(&len,input);
         int z=0;
-        while(z<=2){
+        
+        rot_dir = input[0];
+        rot_speed = input[1];
+        
+        while(z < sizeof(input)){
           Serial.print(input[z]);
           z++;
         }
         Serial.println(" ");
+        input_handler(rot_dir,rot_speed);
       }
     }    
   
@@ -113,10 +117,6 @@ void loop(){
     digitalWrite(pulse,HIGH);
     delay(1); // Test without this as well
     digitalWrite(pulse,LOW);        
-
-    // formatting CAN broadcast
-    // push broadcast (id, ext, length, buffer)
-    CAN.sendMsgBuf(4, 0, 2, 100);
     
     for(int i=0;i<sizeof(broadcast);i++){   
         //Serial.print(broadcast[i]);

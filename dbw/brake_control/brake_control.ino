@@ -93,17 +93,14 @@ void loop(){
         braking_percentage = input[2]; 
         braking_speed = input[3]; 
 
+        while(z < sizeof(input)){
+          Serial.print(input[z]);
+          z++;
+        }
+        Serial.println(" ");        
+
         input_handler(braking_dir, braking_percentage, braking_speed);
-      }   
-//      if(CAN.getCanId()){
-//        CAN.readMsgBuf(&len,input);
-//        int z=0;
-//        while(z<=1){
-//          Serial.print(input[z]);
-//          z++;
-//        }
-//        Serial.println(" ");
-//      }
+      }
     }
     // handle receiving user inputs        
     while (Serial.available() > 0){
@@ -115,14 +112,14 @@ void loop(){
         delay(5);
     }  
     if(request == "engage"){
-//        Serial.println("Engage 1 ");
+//        Serial.print("Engag");
         input_handler(1,100,100);
         braking_dir = 1;
         braking_percentage = 100;
         braking_speed = 100;
     }   
     else if(request == "disengage"){
-//      Serial.println("Disengage 1 ");
+//      Serial.print("Disengag");
       input_handler(0,100,100);
       braking_dir = 0;
       braking_percentage = 100;
@@ -132,8 +129,8 @@ void loop(){
     // broadcast to CAN
     broadcast[0] = braking_dir;    broadcast[1] = braking_percentage;    broadcast[2] = braking_speed;   
     
-    // push broadcast (id, ext, length, buffer)
-    CAN.sendMsgBuf(id, 0, 3, broadcast);
+    // push broadcast (id, ext, length, buffer) --> nodes no longer broadcast
+//    CAN.sendMsgBuf(id, 0, 3, broadcast);
     
     for(int i=0;i<sizeof(broadcast);i++){   
         //Serial.printt(broadcast[i]);
@@ -152,12 +149,12 @@ void input_handler(int braking_dir, double braking_percentage, double braking_sp
   prev_reading=0;
   if(braking_percentage > 1){
     if(braking_dir ==1){
-      ////Serial.println("engage 2 ");
+      ////Serial.println("ed");
       digitalWrite(engage[0],HIGH);
       digitalWrite(engage[1],LOW);
     }
     else if(braking_dir == 0){
-      ////Serial.println("disengage 2 ");
+      ////Serial.println("ed");
       digitalWrite(engage[1],HIGH);
       digitalWrite(engage[0],LOW);
     }
