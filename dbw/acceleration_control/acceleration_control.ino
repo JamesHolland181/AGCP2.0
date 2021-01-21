@@ -10,6 +10,13 @@
   /* Inputs: <percentage of power>
   /* Outputs: <proportionate power>
   /* Example: '100' --> Full power
+   *  
+   *  Pin Hook-Up:
+   *  
+   *  Low-side of pot + GND
+   *  Signal wire + Vout_DAC
+   *  Wiper of pot + A0
+  */
   /*********************************************************************************************************************/
 ///////
 //
@@ -104,8 +111,10 @@ void loop() {
 
   Pedal = analogRead(A0) * (5.0 / 1023.0); //convert signal from pedal to voltage --> when voltage is > 0.10, RC disengaged
 
-  if (Pedal > 0.00) {
+  if (Pedal > 1.00) {
     Serial.println("Pedal: " + String(Pedal));
+    voltage = input_handler(0, 'N'); // --> Should add manual control? (pass 'Pedal') to input_handler
+    //voltage = input_handler(Pedal,'N');
   }
 
   // handle receiving user inputs
@@ -120,8 +129,8 @@ void loop() {
 
   if (request.toInt() > 0) {
     tps = request.toInt();
-//    Serial.print("Throttle Position: ");
-//    Serial.println(tps);
+    Serial.print("Throttle Position: ");
+    Serial.println(tps);
     voltage = input_handler(tps, current_dir); // convert can message to input
   }
   else if (request.indexOf("S") >= 0) {
@@ -140,7 +149,7 @@ void loop() {
   //    }
   //    Serial.println(" ");
 
-  delay(3000);
+  delay(50);
   request = ""; // reset input field
 }
 
@@ -151,7 +160,7 @@ void loop() {
 
 // input handler
 int input_handler(int tps, char current_dir) {
-  voltage = map(tps, 0, 100, 0, 4095); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V
+  voltage = map(tps, 1, 100, 300, 3750); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V (calibration steps necessary)
   // Modulate PWM according to input
   //    Serial.println(voltage);
   if (current_dir == 'R')
@@ -174,6 +183,5 @@ int input_handler(int tps, char current_dir) {
     voltage = 0;
     Motor.setVoltage(voltage, false); // kill power
   }
-
   return voltage;
 }
