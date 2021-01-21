@@ -55,7 +55,7 @@ int rot_speed = 0; // 0-100% RPM in direction of rotation previously defined
 
 // function prototypes
 int can_msg_to_input(void);
-void input_handler(String input);
+void input_handler(bool rot_dir, int rot_speed);
 
 void setup(){
     // Stepper Setup
