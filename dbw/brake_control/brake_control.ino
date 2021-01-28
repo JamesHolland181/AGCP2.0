@@ -86,18 +86,12 @@ void setup(){
 void loop(){    
     // handle receiving inputs
     if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-      if (CAN.getCanId()==9) {         // if CAN is from on-board computer ...
+      if (CAN.getCanId()>=0) {         // if CAN is from on-board computer ...
         CAN.readMsgBuf(&len, input); // read can message to update direction
         
-        braking_dir = input[1];
-        braking_percentage = input[2]; 
-        braking_speed = input[3]; 
-
-        while(z < sizeof(input)){
-          Serial.print(input[z]);
-          z++;
-        }
-        Serial.println(" ");        
+        braking_dir = input[0];
+        braking_percentage = input[1]; 
+        braking_speed = input[2]; 
 
         input_handler(braking_dir, braking_percentage, braking_speed);
       }
@@ -149,12 +143,18 @@ void input_handler(int braking_dir, double braking_percentage, double braking_sp
   prev_reading=0;
   if(braking_percentage > 1){
     if(braking_dir ==1){
-      ////Serial.println("ed");
+      Serial.print("Engage for ");
+      Serial.print(braking_percentage);
+      Serial.print(" @ ");
+      Serial.println(braking_speed);
       digitalWrite(engage[0],HIGH);
       digitalWrite(engage[1],LOW);
     }
     else if(braking_dir == 0){
-      ////Serial.println("ed");
+      Serial.print("Disengage for ");
+      Serial.print(braking_percentage);
+      Serial.print(" @ ");
+      Serial.println(braking_speed);
       digitalWrite(engage[1],HIGH);
       digitalWrite(engage[0],LOW);
     }
