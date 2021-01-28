@@ -61,7 +61,6 @@ int tps = 0;
 long voltage = 0;        // PWM signal for D6
 double Pedal = analogRead(A0); // pedal position --> if applied, kills RC mode
 int gear_selected = 1; // 1 for forward, 2 for neutral, 3 for reverse
-char current_dir = 'F'; // 'F' for forward, 'N' for neutral, 'R' for reverse
 String request = "";
 
 // function prototypes
@@ -85,31 +84,27 @@ void setup() {
 
 void loop() {
   // handle receiving inputs
-  if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-    if (CAN.getCanId() == 9) {         // if the message is from the SpeedGoat ...
+  if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming    
+    if (CAN.getCanId()>=0) {         // if the message is from the SpeedGoat ...
       CAN.readMsgBuf(&len, input); // read can message to update direction
       // Format --> input = [ 'tps', 'desired gear' ]
       // determine current direction
-      if (input[1] == '1') {
-        current_dir = 'F';
+      if (input[1] == 1) {
         gear_selected = 1;
       }
-      if (input[1] == '2') {
-        current_dir = 'N';
+      if (input[1] == 2) {
         gear_selected = 2;
       }
-      if (input[1] == '3') {
-        current_dir = 'R';
+      if (input[1] == 3) {       
         gear_selected = 3;
       }
-      //Serial.println("Current Direction: "+current_dir);
     }
-    if (current_dir != 'N') { // if 'transmission' is in gear
-      voltage = input_handler(input, current_dir); // convert can message to input
+    if (gear_selected != 2) { // if 'transmission' is in gear
+      voltage = input_handler(input[0], gear_selected); // convert can message to input
     }
   }
 
-  Pedal = analogRead(A0) * (5.0 / 1023.0); //convert signal from pedal to voltage --> when voltage is > 0.10, RC disengaged
+  Pedal = 0.0;//analogRead(A0) * (5.0 / 1023.0); //convert signal from pedal to voltage --> when voltage is > 0.10, RC disengaged
 
   if (Pedal > 1.00) {
     Serial.println("Pedal: " + String(Pedal));
@@ -131,7 +126,7 @@ void loop() {
     tps = request.toInt();
     Serial.print("Throttle Position: ");
     Serial.println(tps);
-    voltage = input_handler(tps, current_dir); // convert can message to input
+    voltage = input_handler(tps, gear_selected); // convert can message to input
   }
   else if (request.indexOf("S") >= 0) {
     tps = 0;
@@ -159,25 +154,19 @@ void loop() {
 ////////////////////
 
 // input handler
-int input_handler(int tps, char current_dir) {
-  voltage = map(tps, 1, 100, 300, 3750); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V (calibration steps necessary)
-  // Modulate PWM according to input
-  //    Serial.println(voltage);
-  if (current_dir == 'R')
+int input_handler(int tps, int gear_selected) {  
+  Serial.print("Throttle Position: ");    
+  if (gear_selected == 3)
   {
-    Motor.setVoltage(voltage - 5, false); // in reverse, limit the allowed speed
-    //analogWrite(Motor,voltage-5); // in reverse, limit the allowed speed
-    //Serial.println("Current Dir: Reverse");
-    //Serial.println("TPS: "+String(tps));
-    //Serial.println("PWM Signal: "+String(voltage));
+    Serial.println(tps-5);
+    voltage = map(tps-5, 0, 100, 300, 3685); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V (calibration steps necessary --> max is 4095)    
+    Motor.setVoltage(voltage, false); // in reverse, limit the allowed speed
   }
-  else if (current_dir == 'F')
+  else if (gear_selected == 1)
   {
+    Serial.println(tps);
+    voltage = map(tps, 0, 100, 300, 3750); // translate from percentage to hex for DAC --> cannot go all the way to 5V, limit is ~4.5V (calibration steps necessary)    
     Motor.setVoltage(voltage, false);
-    //analogWrite(Motor,voltage);
-    //Serial.println("Current Dir: Forward");
-    //Serial.println("TPS: "+String(tps));
-    //Serial.println("PWM Signal: "+String(voltage));
   }
   else {
     voltage = 0;
